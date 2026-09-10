@@ -10,7 +10,7 @@ const DEFAULT_KIBANA_URL = 'https://logstash.propertyradar.com';
 const SETTINGS = {
   bom: true,
   guardFormulas: true,
-  filenamePrefix: 'kibana-logs'
+  filenamePrefix: 'logstash-logs'
 };
 
 const el = (id) => document.getElementById(id);

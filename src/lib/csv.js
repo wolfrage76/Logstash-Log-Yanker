@@ -56,15 +56,15 @@
     return options.bom === false ? body : `\uFEFF${body}`;
   }
 
-  /** `kibana-logs-20260909-142530.csv` */
-  function suggestFilename(prefix = 'kibana-logs', extension = 'csv') {
+  /** `logstash-logs-20260909-142530.csv` */
+  function suggestFilename(prefix = 'logstash-logs', extension = 'csv') {
     const d = new Date();
     const p = (n) => String(n).padStart(2, '0');
     const stamp =
       `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}` +
       `-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
     const safePrefix = String(prefix).replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
-    return `${safePrefix || 'kibana-logs'}-${stamp}.${extension}`;
+    return `${safePrefix || 'logstash-logs'}-${stamp}.${extension}`;
   }
 
   NS.csv = { toCsv, suggestFilename, escapeCell };

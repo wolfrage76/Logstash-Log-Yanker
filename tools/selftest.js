@@ -197,7 +197,7 @@ console.log('csv output');
     'a\r\n=1+1'
   );
   check('missing field becomes empty cell', csv.toCsv([{ a: 1 }], ['a', 'zz'], { bom: false }).trimEnd(), 'a,zz\r\n1,');
-  check('filename shape', /^kibana-logs-\d{8}-\d{6}\.csv$/.test(csv.suggestFilename()), true);
+  check('filename shape', /^logstash-logs-\d{8}-\d{6}\.csv$/.test(csv.suggestFilename()), true);
   check('filename prefix sanitised', /^my-logs-\d{8}-\d{6}\.csv$/.test(csv.suggestFilename('my/logs')), true);
 }
 

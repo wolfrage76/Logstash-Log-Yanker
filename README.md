@@ -1,7 +1,7 @@
-# Kibana Log Exporter
+# Logstash Log Yanker
 
-A Chrome extension that captures the logs you're looking at in Kibana / Logstash Discover and
-saves them as a CSV. Everything happens locally in your browser — no data is sent anywhere.
+A Chrome extension that yanks the logs you're looking at in Kibana / Logstash Discover and
+saves them as CSV or JSON. Everything happens locally in your browser — no data is sent anywhere.
 
 ## Install
 

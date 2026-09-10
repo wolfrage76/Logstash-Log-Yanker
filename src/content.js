@@ -23,7 +23,7 @@
   const DEFAULTS = {
     bom: true,
     guardFormulas: true,
-    filenamePrefix: 'kibana-logs'
+    filenamePrefix: 'logstash-logs'
   };
 
   const DELIMITER = ',';

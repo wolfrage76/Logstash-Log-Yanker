@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Kibana Log Exporter — integration test</title>
+    <title>Logstash Log Yanker — integration test</title>
     <style>
       body { font: 13px ui-monospace, monospace; background: #0b1414; color: #d8e8e4; padding: 16px; }
       h1 { font-size: 14px; }
@@ -12,7 +12,7 @@
     </style>
   </head>
   <body>
-    <h1>Kibana Log Exporter — integration test</h1>
+    <h1>Logstash Log Yanker — integration test</h1>
     <p>
       Exercises the real interceptor and content script against a mock <code>_msearch</code>
       endpoint: capture, template replay with <code>search_after</code> pagination,
@@ -261,7 +261,7 @@
         const saved = await command('save', { bom: false });
         check('save reported success', saved.ok, true);
         check('save covered every row', saved.rowCount, 5);
-        check('file name looks right', /^kibana-logs-\d{8}-\d{6}\.csv$/.test(saved.filename), true);
+        check('file name looks right', /^logstash-logs-\d{8}-\d{6}\.csv$/.test(saved.filename), true);
         check('a download was triggered', window.__downloads.length, 1);
 
         const csvOut = await command('csvText', { bom: false });
@@ -279,7 +279,7 @@
         // 5. JSON export: raw values, selected columns, .json filename.
         const savedJson = await command('save', { bom: false, format: 'json' });
         check('json save reported success', savedJson.ok, true);
-        check('json file name looks right', /^kibana-logs-\d{8}-\d{6}\.json$/.test(savedJson.filename), true);
+        check('json file name looks right', /^logstash-logs-\d{8}-\d{6}\.json$/.test(savedJson.filename), true);
         const jsonDownload = window.__downloads[window.__downloads.length - 1];
         const jsonDocs = await (await realFetch(jsonDownload.href)).json();
         check('json holds every row', jsonDocs.length, 5);

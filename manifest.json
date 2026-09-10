@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Kibana Log Yanker",
+  "name": "Logstash Log Yanker",
   "version": "1.5.1",
-  "description": "Capture the logs you're viewing in Kibana / Logstash Discover and save them as CSV.",
+  "description": "Yank log search results from Kibana / Logstash Discover as CSV or JSON.",
   "minimum_chrome_version": "111",
   "permissions": [
     "storage",
@@ -13,7 +13,7 @@
     "https://logstash.propertyradar.com/*"
   ],
   "action": {
-    "default_title": "Kibana Log Yanker",
+    "default_title": "Logstash Log Yanker",
     "default_popup": "src/popup.html",
     "default_icon": {
       "16": "icons/icon16.png",
