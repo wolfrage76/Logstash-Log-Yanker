@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Kibana Log Exporter",
+  "name": "Kibana Log Yanker",
   "version": "1.5.1",
   "description": "Capture the logs you're viewing in Kibana / Logstash Discover and save them as CSV.",
   "minimum_chrome_version": "111",
@@ -13,7 +13,7 @@
     "https://logstash.propertyradar.com/*"
   ],
   "action": {
-    "default_title": "Kibana Log Exporter",
+    "default_title": "Kibana Log Yanker",
     "default_popup": "src/popup.html",
     "default_icon": {
       "16": "icons/icon16.png",
