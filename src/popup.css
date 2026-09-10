@@ -1,0 +1,598 @@
+/* Telemetry-panel look: dark teal ground, phosphor trace, monospaced data. */
+:root {
+  --ink: #061110;
+  --panel: #0c1c1b;
+  --panel-hi: #102524;
+  --line: #1b3230;
+  --text: #d8e8e4;
+  --muted: #6d8783;
+  --phosphor: #3ce2c2;
+  --phosphor-dim: #1c7f6f;
+  --amber: #f0a13b;
+
+  --mono: ui-monospace, "JetBrains Mono", "SFMono-Regular", "SF Mono", Menlo, Consolas, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  /* Keeps native selects, checkboxes and scrollbars on the dark palette. */
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/*
+ * Chrome caps popups at 600px tall, so the panel is a flex column: everything
+ * keeps its natural height and the field list absorbs the slack, which keeps
+ * the export buttons on screen no matter how many fields were discovered.
+ */
+body {
+  width: 384px;
+  max-height: 600px;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--ink);
+  color: var(--text);
+  font: 13px/1.45 var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+main {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* The author display beats the UA's [hidden] rule, so restate it. */
+main[hidden] {
+  display: none;
+}
+
+h2 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+code {
+  font-family: var(--mono);
+  font-size: 0.92em;
+  color: var(--text);
+}
+
+/* --- status bar --------------------------------------------------------- */
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.lamp {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.lamp[data-state="live"] {
+  background: var(--phosphor);
+  box-shadow: 0 0 0 3px rgb(60 226 194 / 0.14);
+  animation: pulse 2.4s ease-in-out infinite;
+}
+
+.lamp[data-state="paused"] {
+  background: var(--amber);
+}
+
+@keyframes pulse {
+  50% {
+    box-shadow: 0 0 0 6px rgb(60 226 194 / 0.04);
+  }
+}
+
+.bar__state {
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.bar__host {
+  margin-left: auto;
+  overflow: hidden;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --- header gear / settings -------------------------------------------- */
+
+.icon-btn {
+  flex: none;
+  margin-left: 6px;
+  padding: 1px 4px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.icon-btn:hover {
+  color: var(--text);
+}
+
+.icon-btn:focus-visible {
+  outline: 2px solid var(--phosphor);
+  outline-offset: 1px;
+  border-radius: 3px;
+}
+
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 14px;
+}
+
+/* The author display beats the UA's [hidden] rule, so restate it. */
+.settings[hidden] {
+  display: none;
+}
+
+.settings__title {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.settings__row {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.settings__row .filter {
+  flex: 1;
+  margin: 0;
+}
+
+.settings__row .btn {
+  flex: none;
+}
+
+.option--stack {
+  display: block;
+}
+
+.option--stack > span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.settings .btn--primary {
+  margin-top: 2px;
+}
+
+/* --- empty state ------------------------------------------------------- */
+
+.unavailable {
+  padding: 22px 16px 26px;
+}
+
+.unavailable__lead {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.unavailable__body {
+  margin: 0 0 14px;
+  color: var(--muted);
+}
+
+.unavailable .btn {
+  width: 100%;
+}
+
+/* --- readout (hero) ---------------------------------------------------- */
+
+.readout {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 13px 14px 12px;
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(180deg, var(--panel) 0%, var(--ink) 100%);
+}
+
+.readout__count {
+  display: block;
+  font-family: var(--mono);
+  font-size: 40px;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--phosphor);
+  font-variant-numeric: tabular-nums;
+}
+
+.readout__label {
+  margin: 7px 0 0;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.readout__cap {
+  color: var(--phosphor-dim);
+}
+
+.readout__trace {
+  flex: none;
+  width: 132px;
+}
+
+.trace {
+  display: block;
+  width: 100%;
+  height: 34px;
+}
+
+.trace__line {
+  fill: none;
+  stroke: var(--phosphor);
+  stroke-width: 1.2;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.trace__fill {
+  fill: rgb(60 226 194 / 0.12);
+  stroke: none;
+}
+
+.trace__label {
+  margin: 5px 0 0;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-align: right;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* --- panels ------------------------------------------------------------ */
+
+.panel,
+.fields,
+.options {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.readout,
+.panel,
+.options,
+.actions,
+.message {
+  flex: none;
+}
+
+.fields {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* --- hero: the one-click fetch ------------------------------------------ */
+
+.hero {
+  padding: 12px 14px 0;
+}
+
+.hero__btn {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 13px;
+}
+
+.hero__note {
+  margin: 7px 1px 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.hero__note[data-tone="warn"] {
+  color: var(--amber);
+}
+
+.progress {
+  height: 3px;
+  margin-top: 8px;
+  border-radius: 2px;
+  overflow: hidden;
+  background: var(--panel-hi);
+}
+
+.progress__fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 2px;
+  background: var(--phosphor);
+  transition: width 400ms ease;
+}
+
+/* --- fields ------------------------------------------------------------ */
+
+.fields__head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 9px;
+}
+
+.fields__tally {
+  font-family: var(--mono);
+  color: var(--phosphor-dim);
+  letter-spacing: 0;
+}
+
+.fields__actions {
+  margin-left: auto;
+  display: flex;
+  gap: 10px;
+}
+
+.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--phosphor);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.link:hover {
+  text-decoration: underline;
+}
+
+.filter {
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--ink);
+  color: var(--text);
+  font: 12px var(--mono);
+}
+
+.filter::placeholder {
+  color: var(--muted);
+}
+
+.filter:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--phosphor);
+  outline-offset: 1px;
+}
+
+.fields__list {
+  flex: 1 1 auto;
+  min-height: 84px;
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel);
+  scrollbar-width: thin;
+  scrollbar-color: var(--phosphor-dim) var(--panel);
+}
+
+.fields__list:empty::after {
+  content: "Nothing captured yet.";
+  display: block;
+  padding: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 9px;
+  border-bottom: 1px solid rgb(27 50 48 / 0.6);
+  cursor: pointer;
+}
+
+.field:last-child {
+  border-bottom: 0;
+}
+
+.field:hover {
+  background: var(--panel-hi);
+}
+
+.field__name {
+  overflow: hidden;
+  flex: 1;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.field__filled {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- options ----------------------------------------------------------- */
+
+.options__row {
+  display: flex;
+  gap: 10px;
+}
+
+.option {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.option > span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.option select {
+  width: 100%;
+}
+
+select {
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel-hi);
+  color: var(--text);
+  font: 12px var(--mono);
+}
+
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.35;
+  cursor: pointer;
+}
+
+.check--tight {
+  margin-top: 0;
+  align-items: center;
+}
+
+input[type="checkbox"] {
+  width: 13px;
+  height: 13px;
+  flex: none;
+  margin: 1px 0 0;
+  accent-color: var(--phosphor);
+}
+
+.check--tight input[type="checkbox"] {
+  margin: 0;
+}
+
+/* --- actions ----------------------------------------------------------- */
+
+.actions {
+  display: flex;
+  gap: 8px;
+  padding: 11px 14px;
+}
+
+.btn {
+  padding: 7px 12px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel-hi);
+  color: var(--text);
+  font: 500 12px var(--sans);
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--phosphor-dim);
+  background: var(--panel);
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--phosphor);
+  outline-offset: 1px;
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.btn--primary {
+  flex: 1;
+  border-color: transparent;
+  background: var(--phosphor);
+  color: #04211d;
+  font-weight: 600;
+}
+
+.btn--primary:hover:not(:disabled) {
+  border-color: transparent;
+  background: #55eed0;
+}
+
+.btn--quiet {
+  margin-left: auto;
+  color: #93aca8;
+}
+
+/* --- message ----------------------------------------------------------- */
+
+.message {
+  margin: 0;
+  padding: 0 14px 12px;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
+/* Give the space back to the field list until there is something to report. */
+.message:empty {
+  display: none;
+}
+
+.message[data-tone="good"] {
+  color: var(--phosphor);
+}
+
+.message[data-tone="bad"] {
+  color: var(--amber);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

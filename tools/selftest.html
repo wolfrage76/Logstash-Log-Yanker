@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Kibana Log Exporter — selftest</title>
+    <style>
+      body { font: 13px ui-monospace, monospace; background: #0b1414; color: #d8e8e4; padding: 16px; }
+      pre { white-space: pre-wrap; }
+      .fail { color: #f0a13b; }
+    </style>
+  </head>
+  <body>
+    <h1>selftest</h1>
+    <pre id="out"></pre>
+    <script>
+      // Browser runner for tools/selftest.js, for machines without node.
+      const out = document.getElementById('out');
+      const log = console.log.bind(console);
+      console.log = (...args) => {
+        const line = args.join(' ');
+        out.innerHTML += (/FAIL|failed/.test(line) ? `<span class="fail">${line}</span>` : line) + '\n';
+        log(...args);
+      };
+    </script>
+    <script src="../src/lib/parse.js"></script>
+    <script src="../src/lib/csv.js"></script>
+    <script src="selftest.js"></script>
+  </body>
+</html>

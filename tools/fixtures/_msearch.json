@@ -1,0 +1,46 @@
+{
+  "responses": [
+    {
+      "took": 7,
+      "hits": {
+        "total": { "value": 3 },
+        "hits": [
+          {
+            "_index": "logstash-2026.09.09",
+            "_id": "doc-1",
+            "_source": {
+              "@timestamp": "2026-09-09T12:00:01.114Z",
+              "message": "GET /api/health 200",
+              "log": { "level": "info" },
+              "host": { "name": "web-01" },
+              "http": { "request": { "method": "GET" }, "response": { "status_code": 200 } },
+              "tags": ["nginx", "access"]
+            }
+          },
+          {
+            "_index": "logstash-2026.09.09",
+            "_id": "doc-2",
+            "_source": {
+              "@timestamp": "2026-09-09T12:00:02.552Z",
+              "message": "POST /api/orders 500, error=\"upstream timeout, retrying\"",
+              "log": { "level": "error" },
+              "host": { "name": "web-02" },
+              "http": { "request": { "method": "POST" }, "response": { "status_code": 500 } }
+            }
+          },
+          {
+            "_index": "logstash-2026.09.09",
+            "_id": "doc-3",
+            "_source": {
+              "@timestamp": "2026-09-09T12:00:03.900Z",
+              "message": "worker restarted",
+              "log": { "level": "warn" },
+              "host": { "name": "worker-01" }
+            },
+            "fields": { "kubernetes.pod.name": ["worker-01-7f9c"] }
+          }
+        ]
+      }
+    }
+  ]
+}

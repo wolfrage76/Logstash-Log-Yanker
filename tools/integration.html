@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Kibana Log Exporter — integration test</title>
+    <style>
+      body { font: 13px ui-monospace, monospace; background: #0b1414; color: #d8e8e4; padding: 16px; }
+      h1 { font-size: 14px; }
+      .ok { color: #3ce2c2; }
+      .fail { color: #f0a13b; }
+      pre { white-space: pre-wrap; }
+    </style>
+  </head>
+  <body>
+    <h1>Kibana Log Exporter — integration test</h1>
+    <p>
+      Exercises the real interceptor and content script against a mock <code>_msearch</code>
+      endpoint: capture, template replay with <code>search_after</code> pagination,
+      deduplication, export and the CSV output. Serve the project over http and open this page.
+    </p>
+    <pre id="out">running…</pre>
+
+    <script>
+      // --- test doubles for the extension APIs ----------------------------
+      // The content script registers one onMessage listener; capturing it lets
+      // the test drive the same commands the popup sends.
+      window.__messages = [];
+      window.chrome = {
+        runtime: {
+          lastError: null,
+          sendMessage: (message, reply) => {
+            window.__messages.push(message);
+            if (reply) reply();
+          },
+          onMessage: {
+            addListener: (fn) => {
+              window.__listener = fn;
+            }
+          }
+        },
+        storage: {
+          local: {
+            get: (defaults, cb) => cb(defaults),
+            set: () => {}
+          }
+        }
+      };
+
+      // The content script downloads by clicking an anchor; capture instead of
+      // writing a file to disk.
+      window.__downloads = [];
+      const realClick = HTMLAnchorElement.prototype.click;
+      HTMLAnchorElement.prototype.click = function () {
+        if (this.download) {
+          window.__downloads.push({ name: this.download, href: this.href });
+          return;
+        }
+        return realClick.apply(this, arguments);
+      };
+
+      // --- mock Elasticsearch ----------------------------------------------
+      // Five documents behind a paginating `_msearch` endpoint. Every request
+      // returns at most `size` hits starting after `search_after`, exactly the
+      // contract `fetchAll` relies on. Installed *before* the interceptor
+      // loads, so the interceptor wraps this stub the way it wraps real fetch.
+      const DOCS = [
+        {
+          _index: 'access-logs-2026.09.09', _id: 'm1',
+          _source: {
+            '@timestamp': '2026-09-09T12:00:05.000Z',
+            message: 'GET /api/health 200',
+            log: { level: 'info' },
+            host: { name: 'web-01' },
+            http: { request: { method: 'GET' }, response: { status_code: 200 } },
+            tags: ['nginx', 'access'],
+            balance: -12.5
+          },
+          sort: [1788987605000, 5]
+        },
+        {
+          _index: 'access-logs-2026.09.09', _id: 'm2',
+          _source: {
+            '@timestamp': '2026-09-09T12:00:04.000Z',
+            message: 'POST /api/orders 500, error="upstream timeout, retrying"',
+            log: { level: 'error' },
+            host: { name: 'web-02' },
+            http: { request: { method: 'POST' }, response: { status_code: 500 } }
+          },
+          sort: [1788987604000, 4]
+        },
+        {
+          _index: 'access-logs-2026.09.09', _id: 'm3',
+          _source: {
+            '@timestamp': '2026-09-09T12:00:03.000Z',
+            message: 'worker restarted',
+            log: { level: 'warn' },
+            host: { name: 'worker-01' }
+          },
+          fields: { 'kubernetes.pod.name': ['worker-01-7f9c'] },
+          sort: [1788987603000, 3]
+        },
+        {
+          _index: 'access-logs-2026.09.09', _id: 'm4',
+          _source: {
+            '@timestamp': '2026-09-09T12:00:02.000Z',
+            message: 'cache warmed',
+            log: { level: 'info' },
+            host: { name: 'web-01' }
+          },
+          sort: [1788987602000, 2]
+        },
+        {
+          _index: 'access-logs-2026.09.09', _id: 'm5',
+          _source: {
+            '@timestamp': '2026-09-09T12:00:01.000Z',
+            message: 'deploy finished',
+            log: { level: 'info' },
+            host: { name: 'deploy-01' }
+          },
+          sort: [1788987601000, 1]
+        }
+      ];
+      const MOCK_URL = 'mock/elasticsearch/_msearch?rest_total_hits_as_int=true';
+
+      window.__mockCalls = [];
+      const realFetch = window.fetch.bind(window);
+      const answer = (body) => {
+        const size = typeof body.size === 'number' ? body.size : 10;
+        let start = 0;
+        if (Array.isArray(body.search_after)) {
+          const seq = body.search_after[1];
+          start = DOCS.findIndex((doc) => doc.sort[1] === seq) + 1;
+          if (start === 0) start = DOCS.length;
+        }
+        return { took: 1, hits: { total: DOCS.length, hits: DOCS.slice(start, start + size) } };
+      };
+      const record = (body) => {
+        const sort = Array.isArray(body.sort) ? body.sort : [];
+        window.__mockCalls.push({
+          size: body.size,
+          searchAfter: body.search_after || null,
+          tiebreak: sort[sort.length - 1] === '_doc',
+          hasAggs: 'aggs' in body || 'aggregations' in body
+        });
+      };
+      const respond = (payload) =>
+        Promise.resolve(
+          new Response(JSON.stringify(payload), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
+          })
+        );
+      window.fetch = (input, init) => {
+        const url = typeof input === 'string' ? input : input && input.url;
+        // Kibana-style courier search: _msearch NDJSON, alternating header/body.
+        if (url && url.includes('mock/elasticsearch/_msearch')) {
+          const lines = String((init && init.body) || '').split('\n').filter((l) => l.trim());
+          const bodies = lines.filter((_, index) => index % 2 === 1).map((l) => JSON.parse(l));
+          const docBody = bodies.find((b) => b.size !== 0) || bodies[0] || {};
+          record(docBody);
+          return respond({ responses: bodies.map(answer) });
+        }
+        // The replay: fetchAll resolves the template to a plain
+        // /elasticsearch/<index>/_search POST with a JSON body.
+        if (url && /\/elasticsearch\/[^/]+\/_search/.test(url)) {
+          const body = JSON.parse(String((init && init.body) || '{}'));
+          record(body);
+          return respond(answer(body));
+        }
+        return realFetch(input, init);
+      };
+    </script>
+
+    <script src="../src/lib/parse.js"></script>
+    <script src="../src/lib/csv.js"></script>
+    <script src="../src/interceptor.js"></script>
+    <script src="../src/content.js"></script>
+
+    <script>
+      const out = document.getElementById('out');
+      const lines = [];
+      let failures = 0;
+
+      function check(name, actual, expected) {
+        const a = JSON.stringify(actual);
+        const b = JSON.stringify(expected);
+        const ok = a === b;
+        if (!ok) failures += 1;
+        lines.push(
+          `<span class="${ok ? 'ok' : 'fail'}">${ok ? 'ok  ' : 'FAIL'}</span> ${name}` +
+            (ok ? '' : `\n       expected ${b}\n       actual   ${a}`)
+        );
+        out.innerHTML = lines.join('\n');
+      }
+
+      const command = (type, payload = {}) =>
+        new Promise((resolve) => window.__listener({ type: `kle:${type}`, payload }, {}, resolve));
+
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+      // The search Kibana itself would send: aggregations batched around one
+      // document query.
+      const kibanaSearch = () =>
+        fetch(MOCK_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-ndjson' },
+          body:
+            JSON.stringify({ index: ['access-logs-*'], ignore_unavailable: true }) + '\n' +
+            JSON.stringify({ size: 0, query: { match_all: {} }, aggs: { by_status: {} } }) + '\n' +
+            JSON.stringify({ index: ['access-logs-*'], ignore_unavailable: true }) + '\n' +
+            JSON.stringify({
+              size: 500,
+              sort: [{ '@timestamp': { order: 'desc', unmapped_type: 'boolean' } }],
+              query: { bool: { must: [{ match_all: {} }] } }
+            }) + '\n'
+        });
+
+      (async () => {
+        check('content script registered a listener', typeof window.__listener, 'function');
+
+        // 1. Watching Kibana's own search arms the template — and captures
+        // nothing passively.
+        await kibanaSearch();
+        await wait(500);
+
+        let status = await command('status');
+        check('no passive capture', status.rowCount, 0);
+        check('kept the request as a replay template', status.template, true);
+
+
+        // 2. Fetch: replays the template page by page.
+        const callsBefore = window.__mockCalls.length;
+        const fetched = await command('fetchAll', { pageSize: 2 });
+        check('fetchAll succeeded', fetched.ok, true);
+        check('fetched the full result set', fetched.rowCount, 5);
+        check('reported the matching total', fetched.total, 5);
+        check('walked three pages', fetched.pages, 3);
+        check('reported completion', fetched.complete, true);
+        await wait(700); // badge report is debounced by 500ms
+        status = await command('status');
+        check('buffer holds the result set', status.rowCount, 5);
+        check('reported the count for the badge', window.__messages.some((m) => m.type === 'kle:count'), true);
+        check('picked up a docvalue field', status.fields.map((f) => f.name).includes('kubernetes.pod.name'), true);
+
+        const names = status.fields.map((f) => f.name);
+        check('timestamp first, message second', names.slice(0, 2), ['@timestamp', 'message']);
+        check('metadata last', names.slice(-2), ['_id', '_index']);
+        check('flattened nested field', names.includes('http.response.status_code'), true);
+
+        const pageCalls = window.__mockCalls.slice(callsBefore);
+        check('later pages used search_after', pageCalls.slice(1).every((c) => c.searchAfter !== null), true);
+        check('appended a _doc tiebreaker', pageCalls.every((c) => c.tiebreak), true);
+        check('stripped the aggregations', pageCalls.every((c) => !c.hasAggs), true);
+
+        // 3. Re-fetching replaces the buffer with the current search's rows.
+        const again = await command('fetchAll', { pageSize: 2 });
+        check('re-fetch starts fresh and re-ingests', again.added, 5);
+        check('re-fetch ends with the same rows', again.rowCount, 5);
+
+        // 4. Export.
+        const saved = await command('save', { bom: false });
+        check('save reported success', saved.ok, true);
+        check('save covered every row', saved.rowCount, 5);
+        check('file name looks right', /^kibana-logs-\d{8}-\d{6}\.csv$/.test(saved.filename), true);
+        check('a download was triggered', window.__downloads.length, 1);
+
+        const csvOut = await command('csvText', { bom: false });
+        const rows = csvOut.text.trimEnd().split('\r\n');
+        check('header plus five rows', rows.length, 6);
+        check('header starts with the time column', rows[0].startsWith('@timestamp,message'), true);
+        check(
+          'a value containing a comma is quoted',
+          rows.some((r) => r.includes('"POST /api/orders 500, error=""upstream timeout, retrying""')),
+          true
+        );
+        check('multi-value field joined', csvOut.text.includes('nginx; access'), true);
+        check('negative number left alone', rows.some((r) => r.endsWith(',-12.5') || r.includes(',-12.5,')), true);
+
+        // 5. JSON export: raw values, selected columns, .json filename.
+        const savedJson = await command('save', { bom: false, format: 'json' });
+        check('json save reported success', savedJson.ok, true);
+        check('json file name looks right', /^kibana-logs-\d{8}-\d{6}\.json$/.test(savedJson.filename), true);
+        const jsonDownload = window.__downloads[window.__downloads.length - 1];
+        const jsonDocs = await (await realFetch(jsonDownload.href)).json();
+        check('json holds every row', jsonDocs.length, 5);
+        check('json keeps numbers as numbers', jsonDocs.some((d) => d.balance === -12.5), true);
+        check('json keeps arrays as arrays', jsonDocs.some((d) => Array.isArray(d.tags)), true);
+
+        const savedJsonSubset = await command('save', {
+          format: 'json',
+          fields: ['message', 'host.name']
+        });
+        check('json subset save ok', savedJsonSubset.ok, true);
+        const subsetDocs = await (await realFetch(window.__downloads[window.__downloads.length - 1].href)).json();
+        check(
+          'json subset limited to chosen columns',
+          subsetDocs.every((d) => Object.keys(d).every((k) => k === 'message' || k === 'host.name')),
+          true
+        );
+
+        // 6. Column selection is honoured in CSV too.
+        const subset = await command('csvText', { bom: false, fields: ['message', 'host.name'] });
+        check('only the chosen columns', subset.text.split('\r\n')[0], 'message,host.name');
+
+        // 7. Clearing empties everything.
+        await command('clear');
+        status = await command('status');
+        check('cleared the buffer', [status.rowCount, status.fields.length], [0, 0]);
+
+        lines.push(
+          failures
+            ? `\n<span class="fail">${failures} check(s) failed</span>`
+            : '\n<span class="ok">all checks passed</span>'
+        );
+        out.innerHTML = lines.join('\n');
+        window.__done = { failures, total: lines.length };
+      })().catch((error) => {
+        out.innerHTML += `\n<span class="fail">threw: ${error && error.stack}</span>`;
+        window.__done = { failures: 1, error: String(error) };
+      });
+    </script>
+  </body>
+</html>

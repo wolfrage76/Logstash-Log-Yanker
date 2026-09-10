@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Kibana Log Exporter</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header class="bar">
+      <span class="lamp" id="lamp" data-state="idle" aria-hidden="true"></span>
+      <span class="bar__state" id="state">Connecting</span>
+      <span class="bar__host" id="host"></span>
+      <button type="button" class="icon-btn" id="settingsBtn" title="Settings" aria-label="Settings">
+        &#9881;
+      </button>
+    </header>
+
+    <section class="settings" id="settingsPanel" hidden>
+      <h2 class="settings__title">Settings</h2>
+
+      <label class="option option--stack">
+        <span>Kibana URL &mdash; the site this extension runs on</span>
+        <div class="settings__row">
+          <input
+            type="url"
+            class="filter"
+            id="kibanaUrl"
+            placeholder="https://logstash.propertyradar.com"
+            spellcheck="false"
+          />
+          <button type="button" class="btn" id="applyUrl">Apply</button>
+        </div>
+      </label>
+
+      <label class="check check--tight">
+        <input type="checkbox" id="bom" checked />
+        <span>Add a byte-order mark so Excel reads UTF-8</span>
+      </label>
+      <label class="check">
+        <input type="checkbox" id="guardFormulas" checked />
+        <span>Prefix cells starting with <code>=</code> or <code>+</code> so spreadsheets don't run them</span>
+      </label>
+
+      <button type="button" class="btn btn--primary" id="settingsDone">Done</button>
+    </section>
+
+    <section class="unavailable" id="unavailable" hidden>
+      <p class="unavailable__lead" id="unavailableLead">Not connected to this tab</p>
+      <p class="unavailable__body" id="unavailableBody">
+        Open your Kibana Discover page or a dashboard with a saved-search (log table) panel, then
+        click Connect. If that fails, reload the Kibana tab and try again.
+      </p>
+      <button type="button" class="btn btn--primary" id="connect">Connect to this tab</button>
+    </section>
+
+    <main id="main" hidden>
+      <section class="hero">
+        <button type="button" class="btn btn--primary hero__btn" id="fetchAll">
+          Fetch all results
+        </button>
+        <div class="progress" id="progress" hidden>
+          <div class="progress__fill" id="progressFill"></div>
+        </div>
+        <p class="hero__note" id="fetchNote">
+          Re-runs the current search and pulls every matching document.
+        </p>
+      </section>
+
+      <section class="readout">
+        <div class="readout__figures">
+          <output class="readout__count" id="count">0</output>
+          <p class="readout__label">rows fetched</p>
+        </div>
+        <div class="readout__trace">
+          <svg
+            class="trace"
+            id="trace"
+            viewBox="0 0 120 34"
+            preserveAspectRatio="none"
+            role="img"
+            aria-label="Capture activity over the last 80 seconds"
+          >
+            <path class="trace__fill" id="traceFill" d="" />
+            <path class="trace__line" id="traceLine" d="" />
+          </svg>
+          <p class="trace__label">last 80s</p>
+        </div>
+      </section>
+
+      <section class="fields">
+        <div class="fields__head">
+          <h2 class="fields__title">Columns <span id="fieldCount" class="fields__tally"></span></h2>
+          <div class="fields__actions">
+            <button type="button" class="link" id="selectAll">all</button>
+            <button type="button" class="link" id="selectNone">none</button>
+          </div>
+        </div>
+        <input class="filter" id="fieldFilter" type="search" placeholder="filter fields" aria-label="Filter fields" />
+        <div class="fields__list" id="fieldList" role="group" aria-label="Columns to export"></div>
+      </section>
+
+      <footer class="actions">
+        <button type="button" class="btn btn--primary" id="save">Save CSV</button>
+        <button type="button" class="btn" id="saveJson">Save JSON</button>
+        <button type="button" class="btn" id="copy">Copy</button>
+        <button type="button" class="btn btn--quiet" id="clear">Clear</button>
+      </footer>
+    </main>
+
+    <p class="message" id="message" role="status" aria-live="polite"></p>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

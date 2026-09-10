@@ -1,0 +1,65 @@
+{
+  "manifest_version": 3,
+  "name": "Kibana Log Exporter",
+  "version": "1.5.1",
+  "description": "Capture the logs you're viewing in Kibana / Logstash Discover and save them as CSV.",
+  "minimum_chrome_version": "111",
+  "permissions": [
+    "storage",
+    "scripting",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://logstash.propertyradar.com/*"
+  ],
+  "action": {
+    "default_title": "Kibana Log Exporter",
+    "default_popup": "src/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "background": {
+    "service_worker": "src/background.js"
+  },
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://*/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://logstash.propertyradar.com/*"
+      ],
+      "js": [
+        "src/lib/parse.js",
+        "src/interceptor.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": false
+    },
+    {
+      "matches": [
+        "https://logstash.propertyradar.com/*"
+      ],
+      "js": [
+        "src/lib/parse.js",
+        "src/lib/csv.js",
+        "src/content.js"
+      ],
+      "run_at": "document_start",
+      "world": "ISOLATED",
+      "all_frames": false
+    }
+  ]
+}
