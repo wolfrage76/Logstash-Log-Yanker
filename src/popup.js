@@ -5,8 +5,6 @@
  * or reloading the extension), we inject it on demand.
  */
 
-const DEFAULT_KIBANA_URL = 'https://logstash.propertyradar.com';
-
 const SETTINGS = {
   bom: true,
   guardFormulas: true,
@@ -89,10 +87,54 @@ function isRestrictedUrl(url) {
   );
 }
 
+function tabOrigin() {
+  try {
+    if (!tabUrl || isRestrictedUrl(tabUrl)) return '';
+    return new URL(tabUrl).origin;
+  } catch {
+    return '';
+  }
+}
+
 /**
- * Content scripts from the manifest only attach to tabs that load *after* the
- * extension is installed/reloaded. For an already-open Kibana tab we inject
- * the same files on demand.
+ * Grant host permission (must start permissions.request before any other await
+ * when interactive — otherwise Chrome drops the user gesture and never saves),
+ * persist the origin, and register document_start scripts for it.
+ * @returns {Promise<boolean>}
+ */
+async function ensureHostAccess(origin, options = {}) {
+  const interactive = !!options.interactive;
+  if (!origin) return false;
+  const pattern = `${origin}/*`;
+
+  let permissionPromise = null;
+  if (interactive) {
+    permissionPromise = chrome.permissions.request({ origins: [pattern] });
+  }
+
+  let granted = false;
+  try {
+    if (permissionPromise) granted = await permissionPromise;
+    else granted = await chrome.permissions.contains({ origins: [pattern] });
+  } catch {
+    granted = false;
+  }
+  if (!granted) return false;
+
+  await chrome.storage.local.set({ kibanaUrl: origin });
+  if (ui.kibanaUrl && !ui.kibanaUrl.value.trim()) ui.kibanaUrl.value = origin;
+
+  const result = await new Promise((resolve) => {
+    chrome.runtime.sendMessage({ type: 'kle:registerUrl', url: origin }, (response) => {
+      void chrome.runtime.lastError;
+      resolve(response || null);
+    });
+  });
+  return !!(result && result.ok);
+}
+
+/**
+ * For an already-open Kibana tab we inject on demand (same files as registration).
  */
 async function injectIntoTab() {
   if (tabId === null) throw new Error('No active tab.');
@@ -113,14 +155,19 @@ async function injectIntoTab() {
     injectImmediately: true
   });
 
-  // Give the listeners a tick to register before the first ping.
   await new Promise((resolve) => setTimeout(resolve, 50));
 }
 
-async function ensureConnected() {
+/**
+ * @param {{ interactive?: boolean }} [options]
+ */
+async function ensureConnected(options = {}) {
+  const interactive = !!options.interactive;
+  const origin = tabOrigin();
+  if (origin) await ensureHostAccess(origin, { interactive });
+
   let status = await send('status');
   if (status && status.ok) {
-    // Make sure MAIN-world hooks are alive even if Kibana replaced fetch.
     send('arm');
     return status;
   }
@@ -131,7 +178,6 @@ async function ensureConnected() {
     return null;
   }
 
-  // Always try inject when not connected — don't give up after one attempt.
   try {
     ui.state.textContent = 'Connecting';
     await injectIntoTab();
@@ -402,7 +448,7 @@ function setBusy(value) {
 }
 
 async function withConnection(action) {
-  const status = await ensureConnected();
+  const status = await ensureConnected({ interactive: true });
   if (!status) {
     renderDisconnected();
     say(lastConnectError || 'Could not reach the page. Click Connect, or reload the Kibana tab.', 'bad');
@@ -414,10 +460,14 @@ async function withConnection(action) {
 ui.connect.addEventListener('click', async () => {
   ui.connect.disabled = true;
   ui.connect.textContent = 'Connecting…';
-  const status = await ensureConnected();
+  const status = await ensureConnected({ interactive: true });
   renderStatus(status);
-  if (status) say('Connected. Click Fetch anytime to pull the logs on this page.', 'good');
-  else {
+  if (status) {
+    say(
+      'Connected. Reload this Kibana tab once so capture starts from page load, then click Fetch.',
+      'good'
+    );
+  } else {
     ui.connect.disabled = false;
     ui.connect.textContent = 'Connect to this tab';
   }
@@ -511,15 +561,14 @@ function setSettingsOpen(open) {
 ui.settingsBtn.addEventListener('click', () => setSettingsOpen(!settingsOpen));
 
 /**
- * Applying a URL: normalise to an origin, get Chrome's host permission for it
- * (already granted silently for the install-time host), then have the service
- * worker re-register the content scripts against it.
+ * Applying a URL: normalise to an origin, get Chrome's host permission for it,
+ * then have the service worker register the content scripts against it.
  * @returns {Promise<boolean>}
  */
 async function applyKibanaUrl() {
   const raw = ui.kibanaUrl.value.trim();
   if (!raw) {
-    say('Enter your Kibana URL, e.g. https://logstash.propertyradar.com', 'bad');
+    say('Enter your Kibana URL, e.g. https://kibana.example.com', 'bad');
     return false;
   }
   let origin;
@@ -532,37 +581,21 @@ async function applyKibanaUrl() {
 
   ui.applyUrl.disabled = true;
   try {
-    let granted = false;
-    try {
-      granted = await chrome.permissions.contains({ origins: [`${origin}/*`] });
-    } catch {
-      granted = false;
-    }
-    if (!granted) {
-      try {
-        granted = await chrome.permissions.request({ origins: [`${origin}/*`] });
-      } catch {
-        granted = false;
-      }
-    }
-    if (!granted) {
+    const ok = await ensureHostAccess(origin, { interactive: true });
+    if (!ok) {
       say('Chrome needs permission for that site — click Apply and allow the prompt.', 'bad');
       return false;
     }
-
-    await chrome.storage.local.set({ kibanaUrl: origin });
-    const result = await new Promise((resolve) => {
-      chrome.runtime.sendMessage({ type: 'kle:registerUrl', url: origin }, (response) => {
-        void chrome.runtime.lastError;
-        resolve(response || null);
-      });
-    });
-    if (!result || !result.ok) {
-      say((result && result.error) || 'Could not register for that site.', 'bad');
-      return false;
-    }
     ui.kibanaUrl.value = origin;
-    say(`Active on ${origin}. Reload your Kibana tab once.`, 'good');
+    if (tabOrigin() === origin) {
+      try {
+        await injectIntoTab();
+        await send('arm');
+      } catch {
+        /* not on that tab / no activeTab */
+      }
+    }
+    say(`Active on ${origin}. Reload your Kibana tab once, then click Fetch.`, 'good');
     return true;
   } finally {
     ui.applyUrl.disabled = false;
@@ -570,8 +603,6 @@ async function applyKibanaUrl() {
 }
 
 ui.settingsDone.addEventListener('click', async () => {
-  // Done used to close without saving — only Apply wrote storage — so a typed
-  // URL looked like it stuck until the popup reopened and reloaded the old value.
   const raw = ui.kibanaUrl.value.trim();
   if (raw) {
     const ok = await applyKibanaUrl();
@@ -614,13 +645,19 @@ ui.guardFormulas.addEventListener('change', () =>
   const stored = await chrome.storage.local.get({
     bom: SETTINGS.bom,
     guardFormulas: SETTINGS.guardFormulas,
-    kibanaUrl: DEFAULT_KIBANA_URL,
+    kibanaUrl: '',
     [`deselected:${host}`]: []
   });
   ui.bom.checked = stored.bom !== false;
   ui.guardFormulas.checked = stored.guardFormulas !== false;
-  ui.kibanaUrl.value = stored.kibanaUrl || DEFAULT_KIBANA_URL;
+  ui.kibanaUrl.value = stored.kibanaUrl || '';
   deselected = new Set(stored[`deselected:${host}`] || []);
+
+  if (!ui.kibanaUrl.value) {
+    const origin = tabOrigin();
+    if (origin) ui.kibanaUrl.value = origin;
+    else setSettingsOpen(true);
+  }
 
   await refresh();
   startPolling();

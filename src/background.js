@@ -1,11 +1,14 @@
 /**
- * Service worker. Keeps the toolbar badge in sync, and registers the content
- * scripts dynamically for whatever Kibana URL is configured in Settings —
- * that's what lets the URL live in storage instead of the manifest.
+ * Service worker. Badge sync + dynamic content-script registration for the
+ * Kibana origin the user chose in Settings. No host is baked into the
+ * manifest — after permission is granted we register document_start scripts
+ * and also inject on each navigation so capture matches the old static path.
  */
 
 const BADGE_COLOR = '#12766a';
-const DEFAULT_KIBANA_URL = 'https://logstash.propertyradar.com';
+
+/** @type {string} */
+let activeOrigin = '';
 
 function formatCount(count) {
   if (count <= 0) return '';
@@ -21,26 +24,64 @@ function setBadge(tabId, count) {
   chrome.action.setBadgeText({ tabId, text }).catch(() => {});
 }
 
-/**
- * (Re)registers content scripts for a user-configured origin. The default
- * host ships statically in the manifest and never depends on this — dynamic
- * registration only adds an override host from Settings. The scripts guard
- * against double-injection, so overlap with the static pair is harmless.
- */
-async function registerFor(url) {
-  let origin;
-  try {
-    origin = new URL(url).origin;
-  } catch {
-    origin = DEFAULT_KIBANA_URL;
-  }
-  const matches = [`${origin}/*`];
+async function unregisterDynamic() {
   try {
     await chrome.scripting.unregisterContentScripts({ ids: ['kle-main', 'kle-isolated'] });
   } catch {
     // Nothing registered yet.
   }
-  if (origin === DEFAULT_KIBANA_URL) return; // manifest covers it
+}
+
+/** Same files/worlds the old static content_scripts used. */
+async function injectTab(tabId) {
+  if (typeof tabId !== 'number') return;
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ['src/lib/parse.js', 'src/interceptor.js'],
+      world: 'MAIN',
+      injectImmediately: true
+    });
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ['src/lib/parse.js', 'src/lib/csv.js', 'src/content.js'],
+      world: 'ISOLATED',
+      injectImmediately: true
+    });
+  } catch {
+    // No host permission yet, or a restricted URL.
+  }
+}
+
+async function injectMatchingTabs(origin) {
+  if (!origin) return;
+  let tabs = [];
+  try {
+    tabs = await chrome.tabs.query({ url: `${origin}/*` });
+  } catch {
+    return;
+  }
+  await Promise.all(tabs.map((tab) => injectTab(tab.id)));
+}
+
+/**
+ * Register document_start scripts for the chosen origin and inject into any
+ * tabs already open there (registration alone does not touch existing tabs).
+ */
+async function registerFor(url) {
+  await unregisterDynamic();
+  activeOrigin = '';
+  if (!url || typeof url !== 'string') return;
+
+  let origin;
+  try {
+    origin = new URL(url).origin;
+  } catch {
+    return;
+  }
+
+  activeOrigin = origin;
+  const matches = [`${origin}/*`];
   await chrome.scripting.registerContentScripts([
     {
       id: 'kle-main',
@@ -59,25 +100,23 @@ async function registerFor(url) {
       allFrames: false
     }
   ]);
+  await injectMatchingTabs(origin);
 }
 
 async function ensureRegistered() {
-  const { kibanaUrl } = await chrome.storage.local.get({ kibanaUrl: DEFAULT_KIBANA_URL });
+  const { kibanaUrl } = await chrome.storage.local.get({ kibanaUrl: '' });
   await registerFor(kibanaUrl);
 }
 
-// Fires on install, update and reload of the unpacked extension.
 chrome.runtime.onInstalled.addListener(() => {
   ensureRegistered().catch(() => {});
 });
-// Registered scripts persist across sessions, but re-assert to be safe.
 chrome.runtime.onStartup.addListener(() => {
   ensureRegistered().catch(() => {});
 });
-// React to Settings changes even if the popup's explicit message is missed.
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && changes.kibanaUrl) {
-    registerFor(changes.kibanaUrl.newValue).catch(() => {});
+    registerFor(changes.kibanaUrl.newValue || '').catch(() => {});
   }
 });
 
@@ -89,8 +128,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return false;
   }
 
-  // Sent by the popup after the user changes the Kibana URL in Settings
-  // (the popup asks for the host permission first — that needs the click).
   if (message.type === 'kle:registerUrl') {
     registerFor(message.url).then(
       () => sendResponse({ ok: true }),
@@ -101,8 +138,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return false;
 });
 
-// A real page load throws the buffer away, so the badge has to reset with it.
-// `changeInfo.url` is absent on a same-URL reload, so key off status alone.
-chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+// Early inject on navigations to the configured host — belt-and-suspenders with
+// registerContentScripts so hooks are in place before Kibana's first searches.
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status === 'loading') setBadge(tabId, 0);
+  if (!activeOrigin) return;
+  const url = (tab && tab.url) || changeInfo.url || '';
+  if (!url.startsWith(activeOrigin)) return;
+  if (changeInfo.status === 'loading' || typeof changeInfo.url === 'string') {
+    injectTab(tabId);
+  }
 });
+
+ensureRegistered().catch(() => {});

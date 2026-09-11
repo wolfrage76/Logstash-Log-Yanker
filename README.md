@@ -7,19 +7,22 @@ saves them as CSV or JSON. Everything happens locally in your browser — no dat
 
 1. Open `chrome://extensions` and turn on **Developer mode** (top right).
 2. Click **Load unpacked** and pick this folder.
-3. Open your Kibana tab. Click the extension icon — if it says it isn't connected,
-   click **Connect to this tab**. (After updating the extension, Chrome may ask you
-   to allow access to your Kibana site; allow it, then Connect again.)
+3. Open the extension popup → **Settings** (gear). Enter your Kibana URL and click
+   **Apply** (or **Done**). Allow Chrome's permission prompt.
+4. Reload your Kibana tab. Click the extension icon — if it isn't connected, click
+   **Connect to this tab**, then reload the Kibana tab once more so capture starts
+   from page load.
 
 The toolbar icon shows a running count of captured rows for the tab.
 
-### It only runs on your Kibana host
+### It only runs on the host you choose
 
-The extension is active on a single site — `https://logstash.propertyradar.com` by default.
-Change it in **Settings** (the gear in the popup header): enter the URL and click **Apply**.
-Chrome will ask to allow the new site, the content scripts are re-registered for it, and the
-choice persists in extension storage. On any other host you can still use the popup's
-**Connect to this tab** for a one-off session (via `activeTab`).
+No Kibana host is baked into the extension. Set yours in **Settings**: enter the URL
+and click **Apply** or **Done**. Chrome asks to allow that site, content scripts are
+registered for it (and injected into matching open tabs), and the choice persists in
+extension storage. **Connect to this tab** also grants and saves the current tab's
+origin. After the first grant, reload the Kibana tab so hooks run from page load —
+that is what makes Fetch reliable.
 
 ## How it works
 
