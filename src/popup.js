@@ -5,8 +5,6 @@
  * or reloading the extension), we inject it on demand.
  */
 
-const DEFAULT_KIBANA_URL = 'https://logstash.propertyradar.com';
-
 const SETTINGS = {
   bom: true,
   guardFormulas: true,
@@ -512,14 +510,13 @@ ui.settingsBtn.addEventListener('click', () => setSettingsOpen(!settingsOpen));
 ui.settingsDone.addEventListener('click', () => setSettingsOpen(false));
 
 /**
- * Applying a URL: normalise to an origin, get Chrome's host permission for it
- * (already granted silently for the install-time host), then have the service
- * worker re-register the content scripts against it.
+ * Applying a URL: normalise to an origin, get Chrome's host permission for it,
+ * then have the service worker register the content scripts against it.
  */
 async function applyKibanaUrl() {
   const raw = ui.kibanaUrl.value.trim();
   if (!raw) {
-    say('Enter your Kibana URL, e.g. https://logstash.propertyradar.com', 'bad');
+    say('Enter your Kibana URL, e.g. https://kibana.example.com', 'bad');
     return;
   }
   let origin;
@@ -593,13 +590,16 @@ ui.guardFormulas.addEventListener('change', () =>
   const stored = await chrome.storage.local.get({
     bom: SETTINGS.bom,
     guardFormulas: SETTINGS.guardFormulas,
-    kibanaUrl: DEFAULT_KIBANA_URL,
+    kibanaUrl: '',
     [`deselected:${host}`]: []
   });
   ui.bom.checked = stored.bom !== false;
   ui.guardFormulas.checked = stored.guardFormulas !== false;
-  ui.kibanaUrl.value = stored.kibanaUrl || DEFAULT_KIBANA_URL;
+  ui.kibanaUrl.value = stored.kibanaUrl || '';
   deselected = new Set(stored[`deselected:${host}`] || []);
+
+  // First run / no saved host: nudge Settings so auto-inject can be configured.
+  if (!stored.kibanaUrl) setSettingsOpen(true);
 
   await refresh();
   startPolling();

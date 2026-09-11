@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Logstash Log Yanker",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "description": "Yank log search results from Kibana / Logstash Discover as CSV or JSON.",
   "minimum_chrome_version": "111",
   "permissions": [
@@ -9,8 +9,9 @@
     "scripting",
     "activeTab"
   ],
-  "host_permissions": [
-    "https://logstash.propertyradar.com/*"
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://*/*"
   ],
   "action": {
     "default_title": "Logstash Log Yanker",
@@ -30,36 +31,5 @@
   },
   "background": {
     "service_worker": "src/background.js"
-  },
-  "optional_host_permissions": [
-    "https://*/*",
-    "http://*/*"
-  ],
-  "content_scripts": [
-    {
-      "matches": [
-        "https://logstash.propertyradar.com/*"
-      ],
-      "js": [
-        "src/lib/parse.js",
-        "src/interceptor.js"
-      ],
-      "run_at": "document_start",
-      "world": "MAIN",
-      "all_frames": false
-    },
-    {
-      "matches": [
-        "https://logstash.propertyradar.com/*"
-      ],
-      "js": [
-        "src/lib/parse.js",
-        "src/lib/csv.js",
-        "src/content.js"
-      ],
-      "run_at": "document_start",
-      "world": "ISOLATED",
-      "all_frames": false
-    }
-  ]
+  }
 }
