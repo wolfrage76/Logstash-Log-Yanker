@@ -244,32 +244,49 @@
    * can catch a fresh document-search template without the user refreshing.
    */
   function nudgeKibanaRefresh() {
+    // Hit every refresh/submit control we can find — dashboards often have a
+    // global timepicker plus per-panel chrome, and Kibana 7.x class names vary.
     const selectors = [
       '[data-test-subj="querySubmitButton"]',
       '[data-test-subj="superDatePickerApplyTimeButton"]',
       '[data-test-subj="dashboardRefreshButton"]',
       '[data-test-subj="refreshQuery"]',
       '[data-test-subj="queryInputSubmit"]',
+      '[data-test-subj="embeddablePanelAction-refreshAction"]',
       'button[aria-label="Refresh"]',
       'button[aria-label="Update"]',
+      'button[aria-label="Update date range"]',
+      'button[tooltip="Refresh"]',
       '.kuiLocalSearchButton',
-      '.euiSuperUpdateButton'
+      '.euiSuperUpdateButton',
+      'button.refresh-button',
+      '.refresh-button'
     ];
+    const clicked = [];
     for (const sel of selectors) {
-      const node = document.querySelector(sel);
-      if (!node) continue;
+      let nodes;
       try {
-        node.click();
-        return sel;
+        nodes = document.querySelectorAll(sel);
       } catch {
-        /* try next */
+        continue;
       }
+      nodes.forEach((node) => {
+        try {
+          node.click();
+          clicked.push(sel);
+        } catch {
+          /* try next */
+        }
+      });
     }
+    if (clicked.length) return clicked[0];
+
     // Last resort: submit the query bar with Enter.
     const input =
       document.querySelector('[data-test-subj="queryInput"]') ||
       document.querySelector('input[aria-label*="Search"]') ||
-      document.querySelector('.kuiLocalSearchInput input');
+      document.querySelector('.kuiLocalSearchInput input') ||
+      document.querySelector('.kibanaWelcomeSearchBox input');
     if (input) {
       try {
         input.focus();
@@ -305,8 +322,13 @@
     armInterceptor();
     const previousAt = state.template ? state.template.at : 0;
     state.fetchProgress = { pages: 0, added: 0, total: null, phase: 'refreshing' };
+    // Late Connect (hooks installed after page load) needs a real re-query;
+    // try twice with a pause so courier/dashboard panels have time to fire.
     nudgeKibanaRefresh();
-    const fresh = await waitForTemplate(8000, previousAt);
+    let fresh = await waitForTemplate(10000, previousAt);
+    if (fresh) return fresh;
+    nudgeKibanaRefresh();
+    fresh = await waitForTemplate(6000, previousAt);
     if (fresh) return fresh;
     return state.template && parse.bodyHasDocQuery(state.template.body) ? state.template : null;
   }
