@@ -509,38 +509,45 @@ function setSettingsOpen(open) {
 }
 
 ui.settingsBtn.addEventListener('click', () => setSettingsOpen(!settingsOpen));
-ui.settingsDone.addEventListener('click', () => setSettingsOpen(false));
 
 /**
  * Applying a URL: normalise to an origin, get Chrome's host permission for it
  * (already granted silently for the install-time host), then have the service
  * worker re-register the content scripts against it.
+ * @returns {Promise<boolean>}
  */
 async function applyKibanaUrl() {
   const raw = ui.kibanaUrl.value.trim();
   if (!raw) {
     say('Enter your Kibana URL, e.g. https://logstash.propertyradar.com', 'bad');
-    return;
+    return false;
   }
   let origin;
   try {
     origin = new URL(raw.includes('://') ? raw : `https://${raw}`).origin;
   } catch {
     say('That does not look like a URL.', 'bad');
-    return;
+    return false;
   }
 
   ui.applyUrl.disabled = true;
   try {
     let granted = false;
     try {
-      granted = await chrome.permissions.request({ origins: [`${origin}/*`] });
+      granted = await chrome.permissions.contains({ origins: [`${origin}/*`] });
     } catch {
       granted = false;
     }
     if (!granted) {
+      try {
+        granted = await chrome.permissions.request({ origins: [`${origin}/*`] });
+      } catch {
+        granted = false;
+      }
+    }
+    if (!granted) {
       say('Chrome needs permission for that site — click Apply and allow the prompt.', 'bad');
-      return;
+      return false;
     }
 
     await chrome.storage.local.set({ kibanaUrl: origin });
@@ -552,16 +559,30 @@ async function applyKibanaUrl() {
     });
     if (!result || !result.ok) {
       say((result && result.error) || 'Could not register for that site.', 'bad');
-      return;
+      return false;
     }
     ui.kibanaUrl.value = origin;
     say(`Active on ${origin}. Reload your Kibana tab once.`, 'good');
+    return true;
   } finally {
     ui.applyUrl.disabled = false;
   }
 }
 
-ui.applyUrl.addEventListener('click', applyKibanaUrl);
+ui.settingsDone.addEventListener('click', async () => {
+  // Done used to close without saving — only Apply wrote storage — so a typed
+  // URL looked like it stuck until the popup reopened and reloaded the old value.
+  const raw = ui.kibanaUrl.value.trim();
+  if (raw) {
+    const ok = await applyKibanaUrl();
+    if (!ok) return;
+  }
+  setSettingsOpen(false);
+});
+
+ui.applyUrl.addEventListener('click', () => {
+  applyKibanaUrl();
+});
 ui.kibanaUrl.addEventListener('keydown', (event) => {
   if (event.key === 'Enter') applyKibanaUrl();
 });

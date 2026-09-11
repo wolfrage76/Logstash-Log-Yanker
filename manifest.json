@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Logstash Log Yanker",
-  "version": "1.5.6",
+  "version": "1.5.7",
   "description": "Yank log search results from Kibana / Logstash Discover as CSV or JSON.",
   "minimum_chrome_version": "111",
   "permissions": [
