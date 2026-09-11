@@ -7,18 +7,18 @@ saves them as CSV or JSON. Everything happens locally in your browser — no dat
 
 1. Open `chrome://extensions` and turn on **Developer mode** (top right).
 2. Click **Load unpacked** and pick this folder.
-3. Open the extension popup → **Settings** (gear). Enter your Kibana URL and click
-   **Apply**. Allow Chrome's permission prompt.
-4. Open your Kibana tab (or reload it). Click the extension icon — if it says it isn't
-   connected, click **Connect to this tab**.
+3. Open your Kibana tab. Click the extension icon — if it says it isn't connected,
+   click **Connect to this tab**. (After updating the extension, Chrome may ask you
+   to allow access to your Kibana site; allow it, then Connect again.)
 
 The toolbar icon shows a running count of captured rows for the tab.
 
-### It only runs on the host you choose
+### It only runs on your Kibana host
 
-No Kibana host is baked into the extension. Set yours in **Settings** (gear): enter the
-URL and click **Apply**. Chrome asks to allow that site, the content scripts are registered
-for it, and the choice persists in extension storage. On any other host you can still use
+The extension is active on a single site — `https://logstash.propertyradar.com` by default.
+Change it in **Settings** (the gear in the popup header): enter the URL and click **Apply**.
+Chrome will ask to allow the new site, the content scripts are re-registered for it, and the
+choice persists in extension storage. On any other host you can still use the popup's
 **Connect to this tab** for a one-off session (via `activeTab`).
 
 ## How it works

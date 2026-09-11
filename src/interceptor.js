@@ -163,15 +163,8 @@
       if (isSearchUrl(url)) {
         diag.searchesSeen += 1;
         diag.lastUrl = String(url || '').slice(0, 200);
-        // Prefer sync capture for string bodies (Kibana 7 courier); decode others.
-        if (typeof body === 'string' && body) sendTemplate(url, body);
-        else {
-          bodyFrom(undefined, undefined, body)
-            .then((requestBody) => {
-              if (requestBody) sendTemplate(url, requestBody);
-            })
-            .catch(() => {});
-        }
+        const requestBody = typeof body === 'string' ? body : undefined;
+        if (requestBody) sendTemplate(url, requestBody);
         this.addEventListener('load', () => {
           try {
             if (this.status < 200 || this.status >= 300) return;
