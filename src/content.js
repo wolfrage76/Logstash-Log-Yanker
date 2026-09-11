@@ -240,46 +240,42 @@
   }
 
   /**
-   * Clicks whatever Kibana control re-runs the current query so our interceptor
-   * can catch a fresh document-search template without the user refreshing.
+   * Clicks a single Kibana control that re-runs the current query. Clicking
+   * every matching button (dashboards have many) aborts in-flight searches via
+   * SearchSource.cancelQueued and we never keep a document-query template.
    */
-  function nudgeKibanaRefresh() {
-    // Hit every refresh/submit control we can find — dashboards often have a
-    // global timepicker plus per-panel chrome, and Kibana 7.x class names vary.
+  function nudgeKibanaRefresh(skipSelector) {
     const selectors = [
       '[data-test-subj="querySubmitButton"]',
       '[data-test-subj="superDatePickerApplyTimeButton"]',
       '[data-test-subj="dashboardRefreshButton"]',
       '[data-test-subj="refreshQuery"]',
       '[data-test-subj="queryInputSubmit"]',
-      '[data-test-subj="embeddablePanelAction-refreshAction"]',
+      '.euiSuperUpdateButton',
+      '.kuiLocalSearchButton',
       'button[aria-label="Refresh"]',
       'button[aria-label="Update"]',
       'button[aria-label="Update date range"]',
-      'button[tooltip="Refresh"]',
-      '.kuiLocalSearchButton',
-      '.euiSuperUpdateButton',
       'button.refresh-button',
-      '.refresh-button'
+      '.refresh-button',
+      '[data-test-subj="embeddablePanelAction-refreshAction"]'
     ];
-    const clicked = [];
     for (const sel of selectors) {
-      let nodes;
+      if (skipSelector && sel === skipSelector) continue;
+      let node;
       try {
-        nodes = document.querySelectorAll(sel);
+        node = document.querySelector(sel);
       } catch {
         continue;
       }
-      nodes.forEach((node) => {
-        try {
-          node.click();
-          clicked.push(sel);
-        } catch {
-          /* try next */
-        }
-      });
+      if (!node) continue;
+      try {
+        node.click();
+        return sel;
+      } catch {
+        /* try next */
+      }
     }
-    if (clicked.length) return clicked[0];
 
     // Last resort: submit the query bar with Enter.
     const input =
@@ -320,16 +316,23 @@
    */
   async function ensureTemplate() {
     armInterceptor();
-    const previousAt = state.template ? state.template.at : 0;
+    const previous = state.template;
+    const previousAt = previous ? previous.at : 0;
     state.fetchProgress = { pages: 0, added: 0, total: null, phase: 'refreshing' };
-    // Late Connect (hooks installed after page load) needs a real re-query;
-    // try twice with a pause so courier/dashboard panels have time to fire.
-    nudgeKibanaRefresh();
-    let fresh = await waitForTemplate(10000, previousAt);
-    if (fresh) return fresh;
-    nudgeKibanaRefresh();
-    fresh = await waitForTemplate(6000, previousAt);
-    if (fresh) return fresh;
+
+    // One click only — a second blast of clicks cancels the searches we need.
+    const first = nudgeKibanaRefresh();
+    let fresh = await waitForTemplate(first ? 10000 : 2000, previousAt);
+    if (fresh && (!previousAt || fresh.at > previousAt)) return fresh;
+
+    if (first) {
+      const second = nudgeKibanaRefresh(first);
+      if (second) fresh = await waitForTemplate(8000, previousAt);
+      if (fresh && (!previousAt || fresh.at > previousAt)) return fresh;
+    }
+
+    // Prefer anything captured before we disturbed Kibana with refresh clicks.
+    if (previous && parse.bodyHasDocQuery(previous.body)) return previous;
     return state.template && parse.bodyHasDocQuery(state.template.body) ? state.template : null;
   }
 
