@@ -28,7 +28,9 @@
 
   const DELIMITER = ',';
   /** Hard result cap: every fetch pulls at most this many documents. */
-  const MAX_ROWS = 500;
+  const MAX_ROWS = 2500;
+  /** Page size for each Elasticsearch replay — keep modest so one response stays manageable. */
+  const PAGE_SIZE = 500;
   const BUCKET_MS = 2000;
   const BUCKET_COUNT = 40;
 
@@ -415,7 +417,10 @@
         };
       }
 
-      const pageSize = Math.max(1, Math.min(MAX_ROWS, Number(payload && payload.pageSize) || MAX_ROWS));
+      const pageSize = Math.max(
+        1,
+        Math.min(PAGE_SIZE, MAX_ROWS, Number(payload && payload.pageSize) || PAGE_SIZE)
+      );
       const body = parse.prepareDocBody(picked.body, pageSize);
       const paged = Array.isArray(body.sort) && body.sort.length > 0;
       const index =
@@ -435,6 +440,20 @@
       // doesn't wipe a good buffer.
       let cleared = false;
       for (let page = 0; ; page += 1) {
+        const remaining = MAX_ROWS - (cleared ? state.rows.length : 0);
+        if (remaining <= 0) {
+          return {
+            ok: true,
+            added,
+            pages: page,
+            rowCount: state.rows.length,
+            total: state.fetchProgress.total,
+            complete: false,
+            capped: true,
+            stopped: false
+          };
+        }
+        body.size = Math.min(pageSize, remaining);
         const requestBody = isMsearch
           ? `${JSON.stringify(picked.header || { index: index || '_all' })}\n${JSON.stringify(body)}\n`
           : JSON.stringify(body);
