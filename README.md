@@ -28,9 +28,9 @@ that is what makes Fetch reliable.
 
 The flow is two clicks: open the popup, hit **Fetch**, save.
 
-The big button — labelled **Fetch all N results**, or **Fetch first 2500 of N** when the
+The big button — labelled **Fetch all N results**, or **Fetch first 3000 of N** when the
 search matches more — re-runs the current search directly against Elasticsearch (with the
-page's own session, so nothing extra to configure) and pulls the newest **2500** matching
+page's own session, so nothing extra to configure) and pulls the newest **3000** matching
 documents at most (in pages of 500). It works from **Discover** and from a **dashboard saved-search panel**
 (the log table). Visualization-only panels are ignored. It keeps the exact index, query,
 filters and time range Kibana used and drops the aggregations. Every fetch starts fresh, so
@@ -75,7 +75,7 @@ arrays and objects.
 
 - The buffer lives in the page, so a full page reload clears it. Moving around inside Kibana is
   fine — only a real reload resets things. Each **Fetch** also replaces it.
-- The 2500-document cap is hard-coded (`MAX_ROWS` in `src/content.js`); fetches page in chunks of 500.
+- The 3000-document cap is hard-coded (`MAX_ROWS` in `src/content.js`); fetches page in chunks of 500.
 - **Copy** is limited to about 4 MB; past that, save the file instead.
 
 ## Development

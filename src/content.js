@@ -28,7 +28,7 @@
 
   const DELIMITER = ',';
   /** Hard result cap: every fetch pulls at most this many documents. */
-  const MAX_ROWS = 2500;
+  const MAX_ROWS = 3000;
   /** Page size for each Elasticsearch replay — keep modest so one response stays manageable. */
   const PAGE_SIZE = 500;
   const BUCKET_MS = 2000;
